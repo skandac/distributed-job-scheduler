@@ -1,0 +1,127 @@
+syntax = "proto3";
+
+package internal.proto;
+
+import "google/protobuf/struct.proto";
+
+//   Scheduler Service
+
+service SchedulerService {
+
+  /* -------- Client APIs -------- */
+
+  // Client submits a new job
+  rpc CreateJob (CreateJobRequest)
+      returns (CreateJobResponse);
+
+  // Client fetches job details
+  rpc GetJob (GetJobRequest)
+      returns (GetJobResponse);
+
+  // Client subscribes to real-time job updates
+  rpc WatchJobStatus (WatchJobStatusRequest)
+      returns (stream JobStatusUpdate);
+
+
+  /* -------- Worker APIs -------- */
+
+  // Worker registers itself
+  rpc RegisterWorker (RegisterWorkerRequest)
+      returns (RegisterWorkerResponse);
+
+  // Worker requests a job (pull-based)
+  rpc RequestJob (RequestJobRequest)
+      returns (RequestJobResponse);
+
+  // Worker reports job execution status
+  rpc ReportJobStatus (ReportJobStatusRequest)
+      returns (ReportJobStatusResponse);
+}
+
+//   Client Messages
+
+message CreateJobRequest {
+  google.protobuf.Struct payload = 1;
+  int32 max_retries = 2;
+}
+
+message CreateJobResponse {
+  string job_id = 1;
+  JobStatus status = 2;
+}
+
+message GetJobRequest {
+  string job_id = 1;
+}
+
+message GetJobResponse {
+  Job job = 1;
+}
+
+message WatchJobStatusRequest {
+  string job_id = 1;
+}
+
+message JobStatusUpdate {
+  string job_id = 1;
+  JobStatus status = 2;
+  string message = 3;
+  int64 timestamp = 4;
+}
+
+//   Worker Messages
+
+message RegisterWorkerRequest {
+  string worker_id = 1;
+  int32 max_concurrent_jobs = 2;
+}
+
+message RegisterWorkerResponse {
+  bool accepted = 1;
+}
+
+message RequestJobRequest {
+  string worker_id = 1;
+}
+
+message RequestJobResponse {
+  bool has_job = 1;
+  Job job = 2;
+}
+
+message ReportJobStatusRequest {
+  string worker_id = 1;
+  string job_id = 2;
+  JobStatus status = 3;
+  string error_message = 4;
+}
+
+message ReportJobStatusResponse {
+  bool acknowledged = 1;
+}
+
+//   Shared Models
+
+message Job {
+  string job_id = 1;
+  google.protobuf.Struct payload = 2;
+  JobStatus status = 3;
+  string assigned_worker = 4;
+
+  int32 retry_count = 5;
+  int32 max_retries = 6;
+
+  int64 created_at = 7;
+  int64 assigned_at = 8;
+  int64 started_at = 9;
+  int64 completed_at = 10;
+}
+
+enum JobStatus {
+  JOB_STATUS_UNKNOWN   = 0;
+  JOB_STATUS_PENDING   = 1;
+  JOB_STATUS_RUNNING   = 2;
+  JOB_STATUS_SUCCESS   = 3;
+  JOB_STATUS_FAILED    = 4;
+  JOB_STATUS_CANCELED  = 5;
+}

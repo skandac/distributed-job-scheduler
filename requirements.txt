@@ -1,0 +1,11 @@
+pip install grpcio-tools
+pip install fastapi
+pip install uvicorn
+pip install redis
+pip install pydantic
+pip install dataclasses-json
+pip install enum34
+pip install typing-extensions
+pip install pytest
+pip install pytest-asyncio
+pip install mypy
