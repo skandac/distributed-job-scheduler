@@ -172,7 +172,31 @@ curl -X POST "[http://127.0.0.1:8000/jobs](http://127.0.0.1:8000/jobs)" \
      -H "Content-Type: application/json" \
      -d '{"type": "email", "payload": {"to": "user@test.com"}}'
 ```
+## OUTPUT
 
+```Bash
+(venv) (base) ➜  distributed-scheduler curl -X POST http://127.0.0.1:8000/jobs/ \       
+-H "Content-Type: application/json" \
+-d '{"payload":{"task":"email"},"max_retries":3}'
+
+{"job_id":"job_1767247114193","status":"PENDING"}%                                                                                              
+```
+Kafka Logging
+```Bash
+INFO:root:Received JobCreated event from Kafka: job_1767247114193
+INFO:root:Picked up job job_1767247114193, current status: JobStatus.PENDING
+INFO:kafka.conn:<BrokerConnection client_id=kafka-python-producer-1, node_id=1 host=localhost:9092 <connecting> [IPv6 ('::1', 9092, 0, 0)]>: connecting to localhost:9092 [('::1', 9092, 0, 0) IPv6]
+INFO:kafka.conn:<BrokerConnection client_id=kafka-python-producer-1, node_id=1 host=localhost:9092 <connected> [IPv6 ('::1', 9092, 0, 0)]>: Connection complete.
+INFO:kafka.conn:<BrokerConnection client_id=kafka-python-producer-1, node_id=bootstrap-0 host=localhost:9092 <connected> [IPv6 ('::1', 9092, 0, 0)]>: Closing connection. 
+INFO:root:Completed job job_1767247114193
+
+```
+We see the status success after worker thread resolution 
+```Bash
+(venv) (base) ➜  distributed-scheduler git:(main) ✗ curl http://127.0.0.1:8000/jobs/job_1767247114193
+{"job_id":"job_1767247114193","payload":{"task":"email"},"status":"SUCCESS","assigned_worker":"worker_1","retry_count":0,"max_retries":3,"timestamps":{"created_at":"2026-01-01T00:58:34.193310","assigned_at":null,"started_at":"2026-01-01T00:58:34.204184","completed_at":"2026-01-01T00:58:36.211930"}}%                                                                                                                                    
+(venv) (base) ➜  distributed-scheduler git:(main) ✗ 
+```
 ## 7. Reliability & Fault Tolerance
 
 To ensure high availability and data integrity, the system implements several distributed systems patterns:
