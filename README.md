@@ -109,7 +109,71 @@ JobCompleted: Worker finishes successfully.
 JobFailed: Execution error or timeout.
 WorkerRegistered / WorkerDead: Lifecycle events for monitoring.
 
-## 5. Reliability & Fault Tolerance
+## 5. Setup & Installation
+
+### Prerequisites
+* Python 3.9+
+* Docker & Docker Compose
+
+### Step 1: Generate gRPC Code
+Compile the Protocol Buffer definitions for internal communication.
+
+```bash
+python -m grpc_tools.protoc \
+  -I . \
+  --python_out=. \
+  --grpc_python_out=. \
+  internal/proto/scheduler.proto
+```
+
+### Step 2: Start Infrastructure (Docker)
+Start Redis, Zookeeper, and Kafka.
+
+```bash
+# 1. Start Zookeeper
+docker run -d --name zookeeper -p 2181:2181 zookeeper:3.8
+
+# 2. Start Kafka
+docker run -d \
+  --name kafka \
+  -p 9092:9092 \
+  -e KAFKA_BROKER_ID=1 \
+  -e KAFKA_ZOOKEEPER_CONNECT=host.docker.internal:2181 \
+  -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092 \
+  -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+  wurstmeister/kafka
+
+# 3. Create Topic
+docker exec -it kafka \
+  /opt/kafka/bin/kafka-topics.sh \
+  --create \
+  --topic jobs \
+  --bootstrap-server localhost:9092
+```
+## 6. Running the Application
+### Start the Scheduler API
+This launches the HTTP server for job submission.
+
+```Bash
+uvicorn internal.api.main:app --reload
+# Running on [http://127.0.0.1:8000](http://127.0.0.1:8000)
+```
+### Start a Worker
+You can run multiple instances of this command in different terminals to simulate a distributed cluster.
+
+```Bash
+python -m internal.worker.worker
+```
+### Submit a Job
+Use cURL or the built-in Swagger UI at http://127.0.0.1:8000/docs.
+
+```Bash
+curl -X POST "[http://127.0.0.1:8000/jobs](http://127.0.0.1:8000/jobs)" \
+     -H "Content-Type: application/json" \
+     -d '{"type": "email", "payload": {"to": "user@test.com"}}'
+```
+
+## 7. Reliability & Fault Tolerance
 
 To ensure high availability and data integrity, the system implements several distributed systems patterns:
 
@@ -119,7 +183,7 @@ To ensure high availability and data integrity, the system implements several di
 * **Kafka Replay:** All state changes are persisted as events in Kafka. In the event of a catastrophic database failure, the system can rebuild the job state by replaying the event stream.
 
 
-## 6. Failure Scenarios
+## 8. Failure Scenarios
 
 | Scenario | System Response |
 | :--- | :--- |
@@ -130,7 +194,7 @@ To ensure high availability and data integrity, the system implements several di
 | **Network Partition** | The system favors **Consistency** over Availability (CP). Updates pause until the partition heals to avoid "Split Brain" (multiple schedulers assigning the same job). |
 
 
-## 7. Optional Enhancements / Roadmap
+## 9. Optional Enhancements / Roadmap
 
 * [ ] **Metrics Collection:** Integrate Prometheus/Grafana to visualize queue depth, job latency, and worker throughput.
 * [ ] **Job Timeouts:** Implement a watchdog to cancel jobs that stay in `RUNNING` state longer than a defined threshold (e.g., 10 minutes).
