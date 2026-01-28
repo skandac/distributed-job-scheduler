@@ -30,6 +30,10 @@ class JobType:
     timestamps: JobTimestamps = field(
         default_factory=lambda: JobTimestamps(created_at=datetime.utcnow())
     )
+    # Version for optimistic locking and idempotency
+    version: int = 0
+    # Unique token for the current processing attempt (idempotency)
+    processing_token: Optional[str] = None
 
     @staticmethod
     def create_new(job_id: str, payload: Dict[str, Any], max_retries: int = 3) -> 'JobType':
@@ -39,9 +43,23 @@ class JobType:
             max_retries=max_retries
         )
     def can_transition_to(self, new_status: JobStatus) -> bool:
+        """
+        Validate state transitions.
+
+        Valid transitions:
+        - PENDING -> RUNNING (worker picks up job)
+        - PENDING -> CANCELED (job canceled before processing)
+        - RUNNING -> SUCCESS (job completed successfully)
+        - RUNNING -> FAILED (job failed, may retry)
+        - RUNNING -> CANCELED (job canceled during processing)
+        - RUNNING -> PENDING (crash recovery - requeue for another worker)
+        - FAILED -> PENDING (retry if retries remaining)
+        - UNKNOWN -> PENDING (recovery from unknown state)
+        """
         valid_transitions = {
             JobStatus.PENDING: [JobStatus.RUNNING, JobStatus.CANCELED],
-            JobStatus.RUNNING: [JobStatus.SUCCESS, JobStatus.FAILED, JobStatus.CANCELED],
+            # Allow RUNNING -> PENDING for crash recovery (requeue)
+            JobStatus.RUNNING: [JobStatus.SUCCESS, JobStatus.FAILED, JobStatus.CANCELED, JobStatus.PENDING],
             JobStatus.FAILED: [JobStatus.PENDING] if self.retry_count < self.max_retries else [],
             JobStatus.SUCCESS: [],
             JobStatus.CANCELED: [],
@@ -77,8 +95,10 @@ class JobType:
             self.timestamps.started_at = None
             self.timestamps.completed_at = None
             self.assigned_worker = None
+            self.processing_token = None
 
         self.status = new_status
+        self.version += 1  # Increment version for optimistic locking
     
 
 
